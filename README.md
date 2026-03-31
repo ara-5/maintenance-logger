@@ -2,7 +2,7 @@
 
 > A production-quality internal tool for logging, tracking, and managing property maintenance requests — built as a self-contained single-file web application with zero dependencies.
 
-**Live Demo → [Add your GitHub Pages link here after deploying]**
+**Live Demo → [https://ara-5.github.io/maintenance-logger/]**
 
 ---
 
@@ -174,6 +174,5 @@ Inside `index.html`, the code is organized into clearly commented sections:
 
 ## Author
 
-Built by **[Your Name]**
+Built by **[Athira Anil Kumar]**
 
-[LinkedIn](https://linkedin.com/in/yourprofile) · [Portfolio](https://yourportfolio.com) · [GitHub](https://github.com/YOUR_USERNAME)
