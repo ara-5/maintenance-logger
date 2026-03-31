@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PropTrack — Maintenance Logger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── DESIGN TOKENS ─────────────────────────────────────────── */
+  :root {
+    --bg:          #0b0d11;
+    --surface:     #13151c;
+    --surface-2:   #191c27;
+    --surface-3:   #1f2333;
+    --border:      #252a39;
+    --border-hi:   #313849;
+    --text:        #e6e9f2;
+    --text-muted:  #7a859e;
+    --text-faint:  #3d4560;
+    --accent:      #5b8df6;
+    --accent-glow: rgba(91,141,246,0.14);
+    --accent-hi:   #7aa4ff;
+    --green:       #25d07a;
+    --green-bg:    rgba(37,208,122,0.10);
+    --green-border:rgba(37,208,122,0.22);
+    --yellow:      #f5a623;
+    --yellow-bg:   rgba(245,166,35,0.10);
+    --yellow-border:rgba(245,166,35,0.22);
+    --red:         #f04f5b;
+    --red-bg:      rgba(240,79,91,0.10);
+    --red-border:  rgba(240,79,91,0.22);
+    --blue-bg:     rgba(91,141,246,0.10);
+    --blue-border: rgba(91,141,246,0.22);
+    --radius:      12px;
+    --radius-sm:   8px;
+    --radius-xs:   6px;
+    --transition:  0.18s cubic-bezier(0.4,0,0.2,1);
+    --shadow:      0 4px 24px rgba(0,0,0,0.35);
+    --font-body:   'Outfit', sans-serif;
+    --font-mono:   'DM Mono', monospace;
+  }
+  [data-theme="light"] {
+    --bg:          #f0f2f8;
+    --surface:     #ffffff;
+    --surface-2:   #f5f7fc;
+    --surface-3:   #ebeef7;
+    --border:      #dde1ef;
+    --border-hi:   #c8cedf;
+    --text:        #1a1f2e;
+    --text-muted:  #5e6a84;
+    --text-faint:  #a8b0c4;
+    --accent:      #3b6fed;
+    --accent-glow: rgba(59,111,237,0.10);
+    --accent-hi:   #2b5cd4;
+    --shadow:      0 4px 24px rgba(0,0,0,0.10);
+  }
+
+  /* ── RESET ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+    transition: background var(--transition), color var(--transition);
+  }
+
+  /* ── TOPBAR ─────────────────────────────────────────────────── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    height: 58px;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+    backdrop-filter: blur(12px);
+  }
+  .logo {
+    font-family: var(--font-body);
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.4px;
+    white-space: nowrap;
+    margin-right: 8px;
+  }
+  .logo em { color: var(--accent); font-style: normal; }
+  .nav-tabs { display: flex; gap: 3px; }
+  .tab-btn {
+    padding: 6px 15px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    transition: background var(--transition), color var(--transition);
+    font-family: var(--font-body);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tab-btn .tab-icon { font-size: 14px; }
+  .tab-btn:hover { background: var(--surface-2); color: var(--text); }
+  .tab-btn.active { background: var(--accent-glow); color: var(--accent); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .ticket-badge {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+  }
+  .theme-btn {
+    width: 34px; height: 34px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    transition: background var(--transition), color var(--transition);
+  }
+  .theme-btn:hover { background: var(--surface-3); color: var(--text); }
+
+  /* ── VIEWS ──────────────────────────────────────────────────── */
+  .view { display: none; animation: fadeIn 0.2s ease; }
+  .view.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── SUBMIT VIEW ────────────────────────────────────────────── */
+  .submit-wrap { max-width: 620px; margin: 0 auto; padding: 40px 24px 80px; }
+  .page-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-bottom: 4px;
+  }
+  .page-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 32px; font-weight: 400; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: var(--shadow);
+  }
+  .form-stack { display: flex; flex-direction: column; gap: 22px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 540px) { .form-row { grid-template-columns: 1fr; } }
+
+  /* Field */
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .req { color: var(--accent); }
+  .opt-tag {
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-faint);
+  }
+  .char-count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-faint);
+    font-weight: 400;
+    font-family: var(--font-mono);
+    transition: color var(--transition);
+  }
+  .char-count.warn { color: var(--yellow); }
+  .char-count.over { color: var(--red); }
+
+  input[type="text"], select, textarea {
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+    width: 100%;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .field.has-error input, .field.has-error select, .field.has-error textarea {
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px rgba(240,79,91,0.10);
+  }
+  textarea { resize: vertical; min-height: 110px; }
+  select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a859e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+    color-scheme: dark;
+  }
+  [data-theme="light"] select { color-scheme: light; }
+  select option { background: var(--surface-2); }
+
+  .err-msg {
+    font-size: 12px;
+    color: var(--red);
+    display: none;
+    font-weight: 500;
+    align-items: center;
+    gap: 4px;
+  }
+  .field.has-error .err-msg { display: flex; }
+
+  /* Urgency radios */
+  .radio-group { display: flex; gap: 8px; }
+  .radio-opt { flex: 1; position: relative; }
+  .radio-opt input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+  .radio-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all var(--transition);
+    background: var(--bg);
+    white-space: nowrap;
+    user-select: none;
+  }
+  .radio-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background var(--transition); }
+  .radio-opt:nth-child(1) .radio-dot { background: var(--green); }
+  .radio-opt:nth-child(2) .radio-dot { background: var(--yellow); }
+  .radio-opt:nth-child(3) .radio-dot { background: var(--red); }
+  .radio-opt:nth-child(1) input:checked + .radio-label { border-color: var(--green-border); color: var(--green); background: var(--green-bg); }
+  .radio-opt:nth-child(2) input:checked + .radio-label { border-color: var(--yellow-border); color: var(--yellow); background: var(--yellow-bg); }
+  .radio-opt:nth-child(3) input:checked + .radio-label { border-color: var(--red-border); color: var(--red); background: var(--red-bg); }
+
+  /* File upload */
+  .file-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 24px 20px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    background: var(--bg);
+    transition: border-color var(--transition), background var(--transition);
+  }
+  .file-zone:hover, .file-zone.drag-over { border-color: var(--accent); background: var(--accent-glow); }
+  .file-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; border: none; padding: 0; }
+  .file-zone-text { color: var(--text-muted); font-size: 13px; pointer-events: none; }
+  .file-zone-text strong { color: var(--accent); }
+  .file-zone-sub { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+  .file-preview {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-top: 8px;
+  }
+  .file-preview.show { display: flex; }
+  .file-preview-icon { font-size: 18px; flex-shrink: 0; }
+  .file-preview-name { font-size: 12px; color: var(--text); font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-preview-size { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); white-space: nowrap; }
+  .file-remove-btn {
+    background: none; border: none; color: var(--text-faint); cursor: pointer;
+    padding: 2px 4px; border-radius: 4px; font-size: 16px; line-height: 1;
+    transition: color var(--transition);
+  }
+  .file-remove-btn:hover { color: var(--red); }
+  .file-err { font-size: 12px; color: var(--red); font-weight: 500; display: none; margin-top: 6px; }
+  .file-err.show { display: block; }
+
+  /* Submit button */
+  .submit-btn {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 13px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+    transition: opacity var(--transition), transform 0.1s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .submit-btn:hover { opacity: 0.88; }
+  .submit-btn:active { transform: scale(0.99); }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Success toast */
+  .ticket-toast {
+    display: none;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-top: 20px;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--green-bg);
+    border: 1px solid var(--green-border);
+    animation: slideDown 0.3s ease;
+  }
+  .ticket-toast.show { display: flex; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  .toast-icon { font-size: 26px; flex-shrink: 0; }
+  .toast-body h3 {
+    font-size: 16px; font-weight: 700; color: var(--green); margin-bottom: 2px;
+  }
+  .toast-body p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .toast-ticket {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--green);
+    letter-spacing: 0.5px;
+  }
+  .toast-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .toast-link-btn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--green-border);
+    background: transparent;
+    color: var(--green);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--transition);
+  }
+  .toast-link-btn:hover { background: var(--green-bg); }
+
+  /* ── DASHBOARD VIEW ─────────────────────────────────────────── */
+  .dash-wrap { padding: 32px 24px 80px; max-width: 1180px; margin: 0 auto; }
+
+  /* Stats row */
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+  .stat-card {
+    flex: 1; min-width: 120px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    letter-spacing: -1px;
+  }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-faint); }
+  .stat-card.open .stat-value { color: var(--yellow); }
+  .stat-card.in-progress .stat-value { color: var(--accent); }
+  .stat-card.resolved .stat-value { color: var(--green); }
+  .stat-card.total .stat-value { color: var(--text); }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;
+  }
+  .search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 280px; }
+  .search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--text-faint); pointer-events: none; font-size: 13px;
+  }
+  .search-input {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px 8px 30px;
+    outline: none;
+    width: 100%;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .filter-sel {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 32px 8px 12px;
+    outline: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237a859e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    -webkit-appearance: none;
+    color-scheme: dark;
+    transition: border-color var(--transition);
+  }
+  [data-theme="light"] .filter-sel { color-scheme: light; }
+  .filter-sel:focus { border-color: var(--accent); }
+  .filter-sel option { background: var(--surface-2); }
+
+  .toolbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    height: 34px; padding: 0 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-body);
+    display: flex; align-items: center; gap: 6px;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+    white-space: nowrap;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-hi); }
+  .icon-btn.danger:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
+  .active-filters {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; min-height: 0;
+  }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent-glow);
+    color: var(--accent);
+    border: 1px solid var(--blue-border);
+  }
+  .chip-remove {
+    background: none; border: none; cursor: pointer;
+    color: inherit; opacity: 0.7; padding: 0; font-size: 14px; line-height: 1;
+  }
+  .chip-remove:hover { opacity: 1; }
+
+  /* Table */
+  .table-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  thead tr { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  th {
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+  }
+  th:hover { color: var(--text-muted); }
+  th .sort-icon { margin-left: 4px; opacity: 0.4; font-size: 10px; }
+  th.sort-asc .sort-icon, th.sort-desc .sort-icon { opacity: 1; color: var(--accent); }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    transition: background var(--transition);
+    animation: rowIn 0.2s ease;
+  }
+  @keyframes rowIn { from { opacity: 0; } to { opacity: 1; } }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+  td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
+
+  .tid {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .prop-name { font-weight: 600; }
+  .cat-name { color: var(--text-muted); }
+  .date-val { color: var(--text-faint); font-size: 11px; font-family: var(--font-mono); white-space: nowrap; }
+  .desc-preview {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: default;
+  }
+
+  .urgency-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .urgency-dot { width: 5px; height: 5px; border-radius: 50%; }
+  .urgency-badge.low   { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+  .urgency-badge.low   .urgency-dot { background: var(--green); }
+  .urgency-badge.medium{ background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+  .urgency-badge.medium .urgency-dot { background: var(--yellow); }
+  .urgency-badge.high  { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+  .urgency-badge.high  .urgency-dot { background: var(--red); }
+
+  .status-sel {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: var(--radius-xs);
+    padding: 5px 24px 5px 9px;
+    cursor: pointer;
+    outline: none;
+    border: 1.5px solid transparent;
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    -webkit-appearance: none;
+    transition: all var(--transition);
+    letter-spacing: 0.2px;
+    color-scheme: dark;
+  }
+  [data-theme="light"] .status-sel { color-scheme: light; }
+  .status-sel option { background: var(--surface-2); color: var(--text); }
+  .status-sel.open       { background-color: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow-border); }
+  .status-sel.in-progress{ background-color: var(--blue-bg);   color: var(--accent); border-color: var(--blue-border); }
+  .status-sel.resolved   { background-color: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-faint); padding: 4px 6px; border-radius: var(--radius-xs);
+    font-size: 14px; transition: color var(--transition), background var(--transition);
+  }
+  .row-btn:hover { background: var(--surface-3); color: var(--text); }
+  .row-btn.del:hover { color: var(--red); background: var(--red-bg); }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 72px 24px;
+    background: var(--surface);
+    color: var(--text-faint);
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 14px; }
+  .empty-state h3 { font-size: 16px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+  .empty-state p { font-size: 13px; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    padding: 28px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+  .modal-meta { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .modal-row { display: flex; gap: 8px; }
+  .modal-key { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-faint); min-width: 100px; padding-top: 1px; }
+  .modal-val { font-size: 13px; color: var(--text); }
+  .modal-desc { font-size: 13px; color: var(--text-muted); line-height: 1.65; background: var(--surface-2); border-radius: var(--radius-xs); padding: 12px; border: 1px solid var(--border); }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-close-btn {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+  }
+  .modal-close-btn:hover { background: var(--surface-3); color: var(--text); }
+
+  /* Confirm dialog */
+  .confirm-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 600;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .confirm-overlay.open { display: flex; animation: fadeIn 0.15s ease; }
+  .confirm-box {
+    background: var(--surface);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius);
+    padding: 28px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .confirm-icon { font-size: 32px; margin-bottom: 12px; }
+  .confirm-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .confirm-box p { font-size: 13px; color: var(--text-muted); margin-bottom: 22px; }
+  .confirm-btns { display: flex; gap: 10px; }
+  .btn-cancel {
+    flex: 1; padding: 9px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface-2);
+    color: var(--text-muted); font-family: var(--font-body); font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-danger {
+    flex: 1; padding: 9px; border-radius: var(--radius-sm);
+    border: 1px solid var(--red-border); background: var(--red-bg);
+    color: var(--red); font-family: var(--font-body); font-size: 13px;
+    font-weight: 600; cursor: pointer;
+    transition: background var(--transition);
+  }
+  .btn-danger:hover { background: rgba(240,79,91,0.18); }
+
+  /* Notification toast */
+  .notif-stack { position: fixed; bottom: 24px; right: 24px; z-index: 700; display: flex; flex-direction: column; gap: 10px; }
+  .notif {
+    background: var(--surface-3);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 10px;
+    animation: notifIn 0.3s ease;
+    max-width: 300px;
+  }
+  @keyframes notifIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    .topbar { padding: 0 14px; gap: 8px; }
+    .submit-wrap, .dash-wrap { padding: 20px 14px 60px; }
+    .card { padding: 20px 16px; }
+    .stats-row .stat-card:nth-child(n+4) { display: none; }
+    .ticket-badge { display: none; }
+    .toolbar-right .icon-btn span { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ──────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="logo">Prop<em>Track</em></div>
+  <nav class="nav-tabs" role="tablist">
+    <button class="tab-btn active" id="tab-submit" role="tab" aria-selected="true" aria-controls="view-submit">
+      <span class="tab-icon">✏️</span> Report Issue
+    </button>
+    <button class="tab-btn" id="tab-dashboard" role="tab" aria-selected="false" aria-controls="view-dashboard">
+      <span class="tab-icon">📊</span> Dashboard
+    </button>
+  </nav>
+  <div class="topbar-right">
+    <div class="ticket-badge" id="ticketBadge">0 tickets</div>
+    <button class="theme-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle light/dark mode">🌙</button>
+  </div>
+</header>
+
+<!-- ── SUBMIT VIEW ─────────────────────────────────────────────── -->
+<main class="view active" id="view-submit" role="tabpanel" aria-labelledby="tab-submit">
+  <div class="submit-wrap">
+    <h1 class="page-title">Report an Issue</h1>
+    <p class="page-sub">Submit a maintenance request and receive a unique tracking number instantly.</p>
+
+    <div class="card">
+      <form id="issueForm" class="form-stack" novalidate autocomplete="off">
+
+        <div class="form-row">
+          <!-- Property -->
+          <div class="field" id="f-property">
+            <label class="field-label" for="property">Property <span class="req">*</span></label>
+            <select id="property" aria-required="true">
+              <option value="">Select property…</option>
+              <option value="Marina Heights — Unit 4A">Marina Heights — Unit 4A</option>
+              <option value="Palm Grove Villa">Palm Grove Villa</option>
+              <option value="Downtown Studio 12">Downtown Studio 12</option>
+              <option value="Sunset Bay Residence">Sunset Bay Residence</option>
+              <option value="The Terrace — Apt 7">The Terrace — Apt 7</option>
+            </select>
+            <span class="err-msg" role="alert">⚠ Please select a property.</span>
+          </div>
+
+          <!-- Category -->
+          <div class="field" id="f-category">
+            <label class="field-label" for="category">Issue Category <span class="req">*</span></label>
+            <select id="category" aria-required="true">
+              <option value="">Select category…</option>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Electrical">Electrical</option>
+              <option value="AC/HVAC">AC/HVAC</option>
+              <option value="Furniture">Furniture</option>
+              <option value="Cleaning">Cleaning</option>
+              <option value="Other">Other</option>
+            </select>
+            <span class="err-msg" role="alert">⚠ Please select a category.</span>
+          </div>
+        </div>
+
+        <!-- Urgency -->
+        <div class="field" id="f-urgency">
+          <label class="field-label">Urgency Level <span class="req">*</span></label>
+          <div class="radio-group" role="group" aria-label="Urgency level">
+            <label class="radio-opt">
+              <input type="radio" name="urgency" value="Low">
+              <span class="radio-label"><span class="radio-dot"></span>Low</span>
+            </label>
+            <label class="radio-opt">
+              <input type="radio" name="urgency" value="Medium">
+              <span class="radio-label"><span class="radio-dot"></span>Medium</span>
+            </label>
+            <label class="radio-opt">
+              <input type="radio" name="urgency" value="High">
+              <span class="radio-label"><span class="radio-dot"></span>High</span>
+            </label>
+          </div>
+          <span class="err-msg" role="alert">⚠ Please select an urgency level.</span>
+        </div>
+
+        <!-- Description -->
+        <div class="field" id="f-desc">
+          <label class="field-label" for="description">
+            Description <span class="req">*</span>
+            <span class="char-count" id="charCount">0 / 500</span>
+          </label>
+          <textarea id="description" placeholder="Describe the issue — what you observed, when it started, any relevant context…" maxlength="500" aria-required="true" aria-describedby="charCount"></textarea>
+          <span class="err-msg" role="alert">⚠ Please provide a description (min. 10 characters).</span>
+        </div>
+
+        <!-- Photo upload -->
+        <div class="field">
+          <label class="field-label">Photo Upload <span class="opt-tag">— Optional · JPEG / PNG / WEBP · max 5 MB</span></label>
+          <div class="file-zone" id="photoZone" role="button" tabindex="0" aria-label="Upload photo">
+            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" aria-label="Photo upload">
+            <div class="file-zone-text">
+              <strong>Click to upload</strong> or drag &amp; drop
+              <div class="file-zone-sub">JPEG, PNG or WEBP — max 5 MB</div>
+            </div>
+          </div>
+          <div class="file-preview" id="filePreview">
+            <span class="file-preview-icon">🖼️</span>
+            <span class="file-preview-name" id="fileName"></span>
+            <span class="file-preview-size" id="fileSize"></span>
+            <button type="button" class="file-remove-btn" id="fileRemoveBtn" aria-label="Remove photo">×</button>
+          </div>
+          <div class="file-err" id="fileErr"></div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span>Submit Issue</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Success toast -->
+    <div class="ticket-toast" id="ticketToast" role="status" aria-live="polite">
+      <span class="toast-icon">✅</span>
+      <div class="toast-body">
+        <div class="toast-ticket" id="toastTicketNum">MNT-0001</div>
+        <h3>Issue Reported Successfully</h3>
+        <p>Your request has been logged. Track status in the Dashboard.</p>
+        <div class="toast-actions">
+          <button class="toast-link-btn" id="toastViewBtn">View in Dashboard →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ── DASHBOARD VIEW ──────────────────────────────────────────── -->
+<main class="view" id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+  <div class="dash-wrap">
+
+    <!-- Stats cards -->
+    <div class="stats-row" id="statsRow" aria-label="Issue statistics"></div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="search" class="search-input" id="searchInput" placeholder="Search tickets…" aria-label="Search issues">
+      </div>
+      <select class="filter-sel" id="filterProperty" aria-label="Filter by property">
+        <option value="">All Properties</option>
+        <option value="Marina Heights — Unit 4A">Marina Heights — Unit 4A</option>
+        <option value="Palm Grove Villa">Palm Grove Villa</option>
+        <option value="Downtown Studio 12">Downtown Studio 12</option>
+        <option value="Sunset Bay Residence">Sunset Bay Residence</option>
+        <option value="The Terrace — Apt 7">The Terrace — Apt 7</option>
+      </select>
+      <select class="filter-sel" id="filterCategory" aria-label="Filter by category">
+        <option value="">All Categories</option>
+        <option value="Plumbing">Plumbing</option>
+        <option value="Electrical">Electrical</option>
+        <option value="AC/HVAC">AC/HVAC</option>
+        <option value="Furniture">Furniture</option>
+        <option value="Cleaning">Cleaning</option>
+        <option value="Other">Other</option>
+      </select>
+      <select class="filter-sel" id="filterUrgency" aria-label="Filter by urgency">
+        <option value="">All Urgencies</option>
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+      </select>
+      <select class="filter-sel" id="filterStatus" aria-label="Filter by status">
+        <option value="">All Statuses</option>
+        <option value="Open">Open</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Resolved">Resolved</option>
+      </select>
+      <div class="toolbar-right">
+        <button class="icon-btn" id="clearFiltersBtn" aria-label="Clear filters">✕ <span>Clear</span></button>
+        <button class="icon-btn" id="exportCsvBtn" aria-label="Export to CSV">⬇ <span>CSV</span></button>
+        <button class="icon-btn danger" id="clearAllBtn" aria-label="Clear all issues">🗑 <span>Clear All</span></button>
+      </div>
+    </div>
+
+    <!-- Active filter chips -->
+    <div class="active-filters" id="filterChips" role="status" aria-live="polite"></div>
+
+    <!-- Table -->
+    <div class="table-card">
+      <div class="table-scroll">
+        <div id="tableWrap"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ── DETAIL MODAL ────────────────────────────────────────────── -->
+<div class="modal-overlay" id="detailOverlay" role="dialog" aria-modal="true" aria-label="Issue details">
+  <div class="modal" id="detailModal">
+    <h2 id="modalTitle">Issue Details</h2>
+    <div class="modal-meta" id="modalMeta"></div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <div class="modal-footer" style="margin-top:20px">
+      <button class="modal-close-btn" id="modalCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM DIALOG ──────────────────────────────────────────── -->
+<div class="confirm-overlay" id="confirmOverlay" role="alertdialog" aria-modal="true">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmMsg">This action cannot be undone.</p>
+    <div class="confirm-btns">
+      <button class="btn-cancel" id="confirmCancel">Cancel</button>
+      <button class="btn-danger" id="confirmOk">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── NOTIFICATION STACK ──────────────────────────────────────── -->
+<div class="notif-stack" id="notifStack" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ── CONSTANTS ──────────────────────────────────────────────── */
+const STORE_KEY   = 'proptrack_v2_issues';
+const THEME_KEY   = 'proptrack_theme';
+const MAX_DESC    = 500;
+const MIN_DESC    = 10;
+const MAX_FILE_MB = 5;
+const ALLOWED_TYPES = ['image/jpeg','image/png','image/webp'];
+
+/* ── VALIDATION HELPERS ─────────────────────────────────────── */
+/**
+ * Sanitize a string for safe insertion as text content.
+ * Uses the browser's built-in textContent setter — no raw innerHTML with user data.
+ */
+function sanitize(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML; // returns HTML-escaped string
+}
+
+/** Validate a stored issue object has the expected shape */
+function isValidIssue(obj) {
+  if (!obj || typeof obj !== 'object') return false;
+  return (
+    typeof obj.ticket      === 'string' && /^MNT-\d{4,}$/.test(obj.ticket) &&
+    typeof obj.property    === 'string' && obj.property.length > 0 &&
+    typeof obj.category    === 'string' && obj.category.length > 0 &&
+    typeof obj.urgency     === 'string' && ['Low','Medium','High'].includes(obj.urgency) &&
+    typeof obj.description === 'string' && obj.description.length >= MIN_DESC &&
+    typeof obj.status      === 'string' && ['Open','In Progress','Resolved'].includes(obj.status) &&
+    typeof obj.date        === 'string' && !isNaN(Date.parse(obj.date))
+  );
+}
+
+/* ── STORAGE ────────────────────────────────────────────────── */
+function loadIssues() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Filter out any corrupted / malformed entries
+    return parsed.filter(isValidIssue);
+  } catch {
+    return [];
+  }
+}
+
+function saveIssues(arr) {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+  } catch (e) {
+    showNotif('⚠ Could not save: storage quota exceeded.', 'warn');
+  }
+}
+
+let issues = loadIssues();
+
+/* ── TICKET NUMBER ──────────────────────────────────────────── */
+function nextTicket() {
+  if (!issues.length) return 'MNT-0001';
+  const nums = issues
+    .map(i => parseInt(i.ticket.replace('MNT-',''), 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (!nums.length) return 'MNT-0001';
+  return 'MNT-' + String(Math.max(...nums) + 1).padStart(4, '0');
+}
+
+/* ── THEME ──────────────────────────────────────────────────── */
+(function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light') {
+    document.documentElement.dataset.theme = 'light';
+    document.getElementById('themeBtn').textContent = '☀️';
+  }
+})();
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const isLight = document.documentElement.dataset.theme === 'light';
+  document.documentElement.dataset.theme = isLight ? '' : 'light';
+  document.getElementById('themeBtn').textContent = isLight ? '🌙' : '☀️';
+  try { localStorage.setItem(THEME_KEY, isLight ? 'dark' : 'light'); } catch {}
+});
+
+/* ── TABS / VIEWS ───────────────────────────────────────────── */
+function showView(name) {
+  ['submit','dashboard'].forEach(v => {
+    const view = document.getElementById('view-' + v);
+    const tab  = document.getElementById('tab-' + v);
+    const active = v === name;
+    view.classList.toggle('active', active);
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  if (name === 'dashboard') { issues = loadIssues(); renderTable(); renderStats(); }
+}
+
+document.getElementById('tab-submit').addEventListener('click',    () => showView('submit'));
+document.getElementById('tab-dashboard').addEventListener('click', () => showView('dashboard'));
+
+/* ── FORM ───────────────────────────────────────────────────── */
+const form     = document.getElementById('issueForm');
+const descEl   = document.getElementById('description');
+const charEl   = document.getElementById('charCount');
+
+// Character counter
+descEl.addEventListener('input', () => {
+  const len = descEl.value.length;
+  charEl.textContent = len + ' / ' + MAX_DESC;
+  charEl.className = 'char-count' + (len > MAX_DESC * 0.9 ? ' warn' : '') + (len > MAX_DESC ? ' over' : '');
+});
+
+// Clear validation state on change
+['property','category','description'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => clrErr(id === 'description' ? 'desc' : id));
+});
+form.querySelectorAll('input[name="urgency"]').forEach(r => {
+  r.addEventListener('change', () => clrErr('urgency'));
+});
+
+function setErr(id) {
+  const el = document.getElementById('f-' + id);
+  if (el) el.classList.add('has-error');
+}
+function clrErr(id) {
+  const el = document.getElementById('f-' + id);
+  if (el) el.classList.remove('has-error');
+}
+
+/* File upload */
+let selectedFile = null;
+
+function handleFile(file) {
+  const errEl = document.getElementById('fileErr');
+  errEl.classList.remove('show');
+  if (!file) return;
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    errEl.textContent = '⚠ Only JPEG, PNG, or WEBP images are allowed.';
+    errEl.classList.add('show');
+    selectedFile = null; return;
+  }
+  const sizeMB = file.size / 1024 / 1024;
+  if (sizeMB > MAX_FILE_MB) {
+    errEl.textContent = `⚠ File is ${sizeMB.toFixed(1)} MB — max allowed is ${MAX_FILE_MB} MB.`;
+    errEl.classList.add('show');
+    selectedFile = null; return;
+  }
+  selectedFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = sizeMB < 0.1
+    ? Math.round(file.size / 1024) + ' KB'
+    : sizeMB.toFixed(1) + ' MB';
+  document.getElementById('filePreview').classList.add('show');
+}
+
+document.getElementById('photoInput').addEventListener('change', function() {
+  handleFile(this.files[0] || null);
+});
+
+document.getElementById('fileRemoveBtn').addEventListener('click', () => {
+  selectedFile = null;
+  document.getElementById('photoInput').value = '';
+  document.getElementById('filePreview').classList.remove('show');
+  document.getElementById('fileErr').classList.remove('show');
+});
+
+// Drag-and-drop (purely visual for drag feedback — file read is handled by input change)
+const zone = document.getElementById('photoZone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+// Keyboard trigger for file zone
+zone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    document.getElementById('photoInput').click();
+  }
+});
+
+/* Form submission */
+form.addEventListener('submit', e => {
+  e.preventDefault();
+
+  // Clear errors
+  ['property','category','urgency','desc'].forEach(clrErr);
+
+  const prop    = document.getElementById('property').value.trim();
+  const cat     = document.getElementById('category').value.trim();
+  const urgency = form.querySelector('input[name="urgency"]:checked')?.value ?? '';
+  const desc    = descEl.value.trim();
+
+  let valid = true;
+  if (!prop)                     { setErr('property'); valid = false; }
+  if (!cat)                      { setErr('category'); valid = false; }
+  if (!urgency)                  { setErr('urgency');  valid = false; }
+  if (desc.length < MIN_DESC)    { setErr('desc');     valid = false; }
+  if (!valid) {
+    // Focus first error
+    const firstErr = form.querySelector('.has-error select, .has-error textarea');
+    if (firstErr) firstErr.focus();
+    return;
+  }
+
+  const ticket = nextTicket();
+  const issue = {
+    ticket,
+    property:    prop,
+    category:    cat,
+    urgency,
+    description: desc,
+    photo:       selectedFile ? selectedFile.name : null,
+    date:        new Date().toISOString(),
+    status:      'Open',
+  };
+
+  issues.unshift(issue);
+  saveIssues(issues);
+  updateBadge();
+
+  // Show ticket toast
+  document.getElementById('toastTicketNum').textContent = ticket;
+  const toast = document.getElementById('ticketToast');
+  toast.classList.add('show');
+  toast.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  setTimeout(() => toast.classList.remove('show'), 8000);
+
+  // Reset form
+  form.reset();
+  descEl.dispatchEvent(new Event('input'));
+  selectedFile = null;
+  document.getElementById('filePreview').classList.remove('show');
+  document.getElementById('fileErr').classList.remove('show');
+  document.getElementById('photoInput').value = '';
+});
+
+document.getElementById('toastViewBtn').addEventListener('click', () => {
+  document.getElementById('ticketToast').classList.remove('show');
+  showView('dashboard');
+});
+
+/* ── STATS ──────────────────────────────────────────────────── */
+function renderStats() {
+  const total   = issues.length;
+  const open    = issues.filter(i => i.status === 'Open').length;
+  const inProg  = issues.filter(i => i.status === 'In Progress').length;
+  const res     = issues.filter(i => i.status === 'Resolved').length;
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card total">
+      <div class="stat-value">${total}</div>
+      <div class="stat-label">Total Tickets</div>
+    </div>
+    <div class="stat-card open">
+      <div class="stat-value">${open}</div>
+      <div class="stat-label">Open</div>
+    </div>
+    <div class="stat-card in-progress">
+      <div class="stat-value">${inProg}</div>
+      <div class="stat-label">In Progress</div>
+    </div>
+    <div class="stat-card resolved">
+      <div class="stat-value">${res}</div>
+      <div class="stat-label">Resolved</div>
+    </div>
+  `;
+}
+
+function updateBadge() {
+  const n = issues.length;
+  document.getElementById('ticketBadge').textContent = n + ' ticket' + (n !== 1 ? 's' : '');
+}
+updateBadge();
+
+/* ── SORT STATE ─────────────────────────────────────────────── */
+let sortCol = 'date';
+let sortDir = 'desc'; // 'asc' | 'desc'
+
+const SORT_COLS = {
+  ticket:   (a,b) => a.ticket.localeCompare(b.ticket),
+  property: (a,b) => a.property.localeCompare(b.property),
+  category: (a,b) => a.category.localeCompare(b.category),
+  urgency:  (a,b) => {
+    const ord = { Low:1, Medium:2, High:3 };
+    return (ord[a.urgency]||0) - (ord[b.urgency]||0);
+  },
+  date:     (a,b) => new Date(a.date) - new Date(b.date),
+  status:   (a,b) => a.status.localeCompare(b.status),
+};
+
+/* ── TABLE ──────────────────────────────────────────────────── */
+function getFilters() {
+  return {
+    search:   document.getElementById('searchInput').value.trim().toLowerCase(),
+    property: document.getElementById('filterProperty').value,
+    category: document.getElementById('filterCategory').value,
+    urgency:  document.getElementById('filterUrgency').value,
+    status:   document.getElementById('filterStatus').value,
+  };
+}
+
+function renderTable() {
+  issues = loadIssues();
+  const f = getFilters();
+
+  let filtered = issues.filter(i => {
+    if (f.property && i.property !== f.property) return false;
+    if (f.category && i.category !== f.category) return false;
+    if (f.urgency  && i.urgency  !== f.urgency)  return false;
+    if (f.status   && i.status   !== f.status)   return false;
+    if (f.search) {
+      const hay = [i.ticket, i.property, i.category, i.description].join(' ').toLowerCase();
+      if (!hay.includes(f.search)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  const cmp = SORT_COLS[sortCol] || SORT_COLS.date;
+  filtered.sort((a,b) => sortDir === 'asc' ? cmp(a,b) : cmp(b,a));
+
+  renderFilterChips(f);
+  renderStats();
+
+  const wrap = document.getElementById('tableWrap');
+
+  if (!filtered.length) {
+    wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${issues.length ? '🔍' : '📋'}</div>
+        <h3>${issues.length ? 'No matching issues' : 'No issues yet'}</h3>
+        <p>${issues.length ? 'Try adjusting your filters or search.' : 'Submit your first maintenance request to get started.'}</p>
+      </div>`;
+    return;
+  }
+
+  const thDef = (col, label) => {
+    const cls = sortCol === col ? (sortDir === 'asc' ? ' sort-asc' : ' sort-desc') : '';
+    const icon = sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+    return `<th class="${cls}" data-col="${col}">${sanitize(label)}<span class="sort-icon">${icon}</span></th>`;
+  };
+
+  const rows = filtered.map(issue => {
+    const d   = new Date(issue.date);
+    const dt  = d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    const urg = issue.urgency.toLowerCase().replace(' ','-');
+    const stc = issue.status === 'Open' ? 'open' : issue.status === 'In Progress' ? 'in-progress' : 'resolved';
+    return `<tr>
+      <td><span class="tid">${sanitize(issue.ticket)}</span></td>
+      <td class="prop-name">${sanitize(issue.property)}</td>
+      <td class="cat-name">${sanitize(issue.category)}</td>
+      <td><span class="urgency-badge ${urg}"><span class="urgency-dot"></span>${sanitize(issue.urgency)}</span></td>
+      <td class="date-val">${dt}</td>
+      <td>
+        <select class="status-sel ${stc}" data-ticket="${sanitize(issue.ticket)}" aria-label="Update status for ${sanitize(issue.ticket)}">
+          <option${issue.status==='Open'?' selected':''}>Open</option>
+          <option${issue.status==='In Progress'?' selected':''}>In Progress</option>
+          <option${issue.status==='Resolved'?' selected':''}>Resolved</option>
+        </select>
+      </td>
+      <td>
+        <div class="row-actions">
+          <button class="row-btn" data-ticket="${sanitize(issue.ticket)}" data-action="view" title="View details" aria-label="View details for ${sanitize(issue.ticket)}">👁</button>
+          <button class="row-btn del" data-ticket="${sanitize(issue.ticket)}" data-action="delete" title="Delete ticket" aria-label="Delete ${sanitize(issue.ticket)}">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table role="grid" aria-label="Issue tracker">
+      <thead><tr>
+        ${thDef('ticket','Ticket #')}
+        ${thDef('property','Property')}
+        ${thDef('category','Category')}
+        ${thDef('urgency','Urgency')}
+        ${thDef('date','Date')}
+        <th>Status</th>
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  // Attach events
+  wrap.querySelectorAll('.status-sel').forEach(sel => {
+    sel.addEventListener('change', handleStatusChange);
+  });
+  wrap.querySelectorAll('[data-action="view"]').forEach(btn => {
+    btn.addEventListener('click', () => openDetail(btn.dataset.ticket));
+  });
+  wrap.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => confirmDelete(btn.dataset.ticket));
+  });
+  wrap.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      if (sortCol === th.dataset.col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortCol = th.dataset.col; sortDir = 'asc'; }
+      renderTable();
+    });
+  });
+}
+
+/* Status change */
+function handleStatusChange(e) {
+  const sel     = e.currentTarget;
+  const ticket  = sel.dataset.ticket;
+  const newStat = sel.value;
+  const all     = loadIssues();
+  const idx     = all.findIndex(i => i.ticket === ticket);
+  if (idx === -1) return;
+  all[idx].status = newStat;
+  saveIssues(all);
+  issues = all;
+  const stc = newStat === 'Open' ? 'open' : newStat === 'In Progress' ? 'in-progress' : 'resolved';
+  sel.className = 'status-sel ' + stc;
+  renderStats();
+  updateBadge();
+  showNotif(`✓ ${ticket} → ${newStat}`);
+}
+
+/* Filter chips */
+function renderFilterChips(f) {
+  const chips = [];
+  if (f.search)   chips.push({ label: `🔍 "${f.search}"`,   clear: () => { document.getElementById('searchInput').value = ''; renderTable(); } });
+  if (f.property) chips.push({ label: `📍 ${f.property}`,   clear: () => { document.getElementById('filterProperty').value = ''; renderTable(); } });
+  if (f.category) chips.push({ label: `🏷 ${f.category}`,    clear: () => { document.getElementById('filterCategory').value = ''; renderTable(); } });
+  if (f.urgency)  chips.push({ label: `⚡ ${f.urgency}`,     clear: () => { document.getElementById('filterUrgency').value = ''; renderTable(); } });
+  if (f.status)   chips.push({ label: `● ${f.status}`,       clear: () => { document.getElementById('filterStatus').value = ''; renderTable(); } });
+
+  const container = document.getElementById('filterChips');
+  container.innerHTML = '';
+  chips.forEach((c, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'filter-chip';
+    chip.innerHTML = `${sanitize(c.label)} <button class="chip-remove" aria-label="Remove filter">×</button>`;
+    chip.querySelector('.chip-remove').addEventListener('click', c.clear);
+    container.appendChild(chip);
+  });
+}
+
+/* Filter listeners */
+['searchInput','filterProperty','filterCategory','filterUrgency','filterStatus'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTable);
+});
+
+document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+  document.getElementById('searchInput').value    = '';
+  document.getElementById('filterProperty').value = '';
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('filterUrgency').value  = '';
+  document.getElementById('filterStatus').value   = '';
+  renderTable();
+});
+
+/* ── DETAIL MODAL ───────────────────────────────────────────── */
+function openDetail(ticket) {
+  const issue = issues.find(i => i.ticket === ticket);
+  if (!issue) return;
+  const d  = new Date(issue.date).toLocaleString('en-GB', {
+    day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'
+  });
+  document.getElementById('modalTitle').textContent = issue.ticket + ' — ' + issue.category;
+  document.getElementById('modalMeta').innerHTML = [
+    ['Property',  issue.property],
+    ['Category',  issue.category],
+    ['Urgency',   issue.urgency],
+    ['Status',    issue.status],
+    ['Submitted', d],
+    ...(issue.photo ? [['Photo', issue.photo]] : []),
+  ].map(([k,v]) => `<div class="modal-row">
+    <span class="modal-key">${sanitize(k)}</span>
+    <span class="modal-val">${sanitize(v)}</span>
+  </div>`).join('');
+  document.getElementById('modalDesc').textContent = issue.description;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+document.getElementById('modalCloseBtn').addEventListener('click',  () => document.getElementById('detailOverlay').classList.remove('open'));
+document.getElementById('detailOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('detailOverlay').classList.remove('open');
+    document.getElementById('confirmOverlay').classList.remove('open');
+  }
+});
+
+/* ── CONFIRM / DELETE ───────────────────────────────────────── */
+let pendingDelete = null;
+
+function confirmDelete(ticket) {
+  pendingDelete = ticket;
+  document.getElementById('confirmTitle').textContent = 'Delete ' + ticket + '?';
+  document.getElementById('confirmMsg').textContent   = 'This ticket will be permanently removed and cannot be recovered.';
+  document.getElementById('confirmOk').textContent    = 'Delete Ticket';
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+
+document.getElementById('confirmCancel').addEventListener('click', () => {
+  pendingDelete = null;
+  document.getElementById('confirmOverlay').classList.remove('open');
+});
+
+document.getElementById('confirmOk').addEventListener('click', () => {
+  if (pendingDelete) {
+    issues = loadIssues().filter(i => i.ticket !== pendingDelete);
+    saveIssues(issues);
+    updateBadge();
+    showNotif('🗑 ' + pendingDelete + ' deleted');
+    pendingDelete = null;
+  }
+  document.getElementById('confirmOverlay').classList.remove('open');
+  renderTable();
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!issues.length) { showNotif('ℹ No tickets to clear'); return; }
+  pendingDelete = '__ALL__';
+  document.getElementById('confirmTitle').textContent = 'Clear all tickets?';
+  document.getElementById('confirmMsg').textContent   = 'All ' + issues.length + ' tickets will be permanently deleted.';
+  document.getElementById('confirmOk').textContent    = 'Clear All';
+  document.getElementById('confirmOverlay').classList.add('open');
+  // Override the OK handler temporarily
+  document.getElementById('confirmOk').onclick = () => {
+    issues = [];
+    saveIssues(issues);
+    updateBadge();
+    showNotif('🗑 All tickets cleared');
+    document.getElementById('confirmOverlay').classList.remove('open');
+    document.getElementById('confirmOk').onclick = null;
+    renderTable();
+  };
+});
+
+/* ── CSV EXPORT ─────────────────────────────────────────────── */
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  const data = loadIssues();
+  if (!data.length) { showNotif('ℹ No data to export'); return; }
+  const headers = ['Ticket #','Property','Category','Urgency','Status','Date Submitted','Description','Photo'];
+  const csvRows = [headers, ...data.map(i => [
+    i.ticket,
+    i.property,
+    i.category,
+    i.urgency,
+    i.status,
+    new Date(i.date).toLocaleString('en-GB'),
+    i.description,
+    i.photo || '',
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`))];
+  const csv = csvRows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `proptrack-issues-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotif('⬇ CSV exported — ' + data.length + ' records');
+});
+
+/* ── NOTIFICATION TOASTS ────────────────────────────────────── */
+function showNotif(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'notif';
+  el.textContent = msg;
+  const stack = document.getElementById('notifStack');
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    el.style.opacity    = '0';
+    el.style.transform  = 'translateX(20px)';
+    setTimeout(() => el.remove(), 320);
+  }, 2800);
+}
+
+/* ── INIT ───────────────────────────────────────────────────── */
+// Pre-populate with sample data if first load
+if (!issues.length) {
+  const samples = [
+    { ticket:'MNT-0001', property:'Marina Heights — Unit 4A', category:'Plumbing',   urgency:'High',   description:'Bathroom sink is leaking badly under the cabinet. Water pooling on the floor and there is a risk of damage to cabinetry.',       photo:null, date: new Date(Date.now()-86400000*3).toISOString(), status:'Open' },
+    { ticket:'MNT-0002', property:'Palm Grove Villa',         category:'Electrical', urgency:'Medium', description:'Two power outlets in the living room are not working. Circuit breaker was checked and seems fine, outlets just do not respond.',   photo:null, date: new Date(Date.now()-86400000*2).toISOString(), status:'In Progress' },
+    { ticket:'MNT-0003', property:'Downtown Studio 12',       category:'AC/HVAC',    urgency:'High',   description:'Air conditioner is making a loud rattling noise and the cooling efficiency has dropped significantly over the past week.',          photo:null, date: new Date(Date.now()-86400000*1).toISOString(), status:'Open' },
+    { ticket:'MNT-0004', property:'Sunset Bay Residence',     category:'Cleaning',   urgency:'Low',    description:'Common area hallway on the second floor needs a deep clean. The carpet has several stains and there is visible dust on the fixtures.', photo:null, date: new Date(Date.now()-86400000*5).toISOString(), status:'Resolved' },
+    { ticket:'MNT-0005', property:'The Terrace — Apt 7',      category:'Furniture',  urgency:'Medium', description:'The main bedroom wardrobe door hinge is broken. Door does not close properly and is coming off the frame on the top right side.',    photo:null, date: new Date(Date.now()-86400000*4).toISOString(), status:'In Progress' },
+  ];
+  issues = samples;
+  saveIssues(issues);
+  updateBadge();
+}
+</script>
+</body>
+</html>
